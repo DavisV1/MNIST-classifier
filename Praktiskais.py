@@ -1,5 +1,7 @@
 import torch
 import torchvision
+#Te jāimportē modulis bet kā to pareizi noformēt lai es varētu lietot 1 for loop gan train gan test?
+
 
 n_epochs = 2
 batch_size_train = 64
@@ -11,8 +13,11 @@ log_interval = 10
 random_seed = 1
 torch.backends.cudnn.enabled = False
 torch.manual_seed(random_seed)
+
+
 # Load MNIST DataSet ar torchvision
-# 0.1307 un 0.3081 izmanto Normalize()
+# 0.1307 un 0.3081 izmanto Normalize() mean and standard deviation of the MNIST dataset
+
 train_loader = torch.utils.data.DataLoader(
     torchvision.datasets.MNIST('/files/', train=True, download=True,
                                transform=torchvision.transforms.Compose([
@@ -35,13 +40,13 @@ examples = enumerate(test_loader)
 
 batch_idx, (example_data, example_targets) = next(examples)
 
-print(example_data.shape)
+#print(example_data.shape)
 # 1000 piemēri 28x28px Grayscale jo '1'
 
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
+# Kods zemāk jāpārceļ uz module_v1?
 
 class Net(nn.Module):
     def __init__(self):
@@ -59,13 +64,14 @@ class Net(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        return F.log_softmax(x,dim=1)
+        return F.log_softmax(x, dim=1)
 
 
 # Inicializē net() un optimaizeri
 network = Net()
-optimizer = optim.SGD(network.parameters(), lr=learning_rate,
-                      momentum=momentum)
+optimizer = optim.RMSprop(network.parameters(), lr=learning_rate, alpha=0.99, eps=1e-08, weight_decay=0,
+                          momentum=0, centered=False)
+
 
 # PyTorch pēc noklusējumu apkopo gradientus tāpēc manuāli uzliekam nulli ar  optimizer.zero_grad()
 # Kad saņemts iznākums aprēķinam negatīva log loss starp izvadi un 'ground truth label' no datiem
@@ -83,7 +89,9 @@ def train(epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
         output = network(data)
-        loss = F.nll_loss(output, target)
+        # loss = F.nll_loss(output, target)
+
+        loss = F.cross_entropy(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % log_interval == 0:
@@ -107,7 +115,9 @@ def test():
     with torch.no_grad():
         for data, target in test_loader:
             output = network(data)
-            test_loss += F.nll_loss(output, target, size_average=False).item()
+            test_loss += F.cross_entropy(output, target).item()
+            #test_loss += F.nll_loss(output, target, size_average=False).item()
+            # test_loss = nn.CrossEntropyLoss()
             pred = output.data.max(1, keepdim=True)[1]
             correct += pred.eq(target.data.view_as(pred)).sum()
     test_loss /= len(test_loader.dataset)
@@ -117,8 +127,12 @@ def test():
         100. * correct / len(test_loader.dataset)))
 
 
+
 # Izmantojot no_grad() var izvairīties no aprēķinu saglabāšanas un atrādot rezultātu aprēķinu grafā
 # Manuāli pieliek test() pirms cikla lai pārbaudītu tīklu ar nejaušiem parametriem
+
+
+# Šeit būtu jābūt tam 1 for loop par ko runājām?
 test()
 for epoch in range(1, n_epochs + 1):
     train(epoch)
@@ -126,16 +140,17 @@ for epoch in range(1, n_epochs + 1):
 
 # Training no Checkpoints
 continued_network = Net()
-continued_optimizer = optim.SGD(network.parameters(), lr=learning_rate,
-                                momentum=momentum)
+continued_optimizer = optim.RMSprop(network.parameters(), lr=learning_rate, alpha=0.99, eps=1e-08, weight_decay=0,
+                                    momentum=0, centered=False)
 network_state_dict = torch.load('./results/model.pth')
 continued_network.load_state_dict(network_state_dict)
 
 optimizer_state_dict = torch.load('./results/optimizer.pth')
 continued_optimizer.load_state_dict(optimizer_state_dict)
 
-for i in range(4,9):
-  test_counter.append(i*len(train_loader.dataset))
-  train(i)
-  test()
+for i in range(4, 9):
+    test_counter.append(i * len(train_loader.dataset))
+    train(i)
+    test()
+
 
